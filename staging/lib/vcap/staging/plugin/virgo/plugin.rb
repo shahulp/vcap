@@ -1,85 +1,77 @@
-require File.expand_path('../../common', __FILE__)
-require File.join(File.expand_path('../', __FILE__), 'virgo.rb')
+require 'fileutils'
+require 'yaml'
 
-class VirgoPlugin < StagingPlugin
+class Virgo
+  AUTOSTAGING_JAR = 'com.sap.icp.autostager-1.0.0.PTYP.jar'
+  AUTOSTAGING_DEP =['com.springsource.org.codehaus.jackson-1.4.3.jar','com.springsource.org.codehaus.jackson.mapper-1.4.3.jar',
+                     'com.springsource.org.joda.time-1.5.2.jar' ]
+  SERVICE_DRIVER_HASH = {
+      "mysql-5.1" => 'com.springsource.com.mysql.jdbc-5.1.6.jar',
+      "postgresql-9.0" => 'com.springsource.org.postgresql.jdbc4-8.3.604.jar'
+  }
 
-  def framework
-    'virgo'
+  def self.resource_dir
+    File.join(File.dirname(__FILE__), 'resources')
   end
 
+  def self.repository
+    "repository"
+  end
 
-  def stage_application
-    Dir.chdir(destination_directory) do
-      create_app_directories
-      webapp_root = Virgo.prepare(destination_directory)
-      copy_source_files(webapp_root)
-      create_startup_script
-      create_stop_script
+  def self.prepare(dir)
+    FileUtils.cp_r(resource_dir, dir)
+    output = %x[cd #{dir}; unzip -q resources/virgo.zip]
+    raise "Could not unpack Virgo: #{output}" unless $? == 0
+    webapp_path = File.join(dir, "virgo", "artifacts")
+    server_xml = File.join(dir, "virgo", "config", "tomcat-server.xml")
+    FileUtils.rm_f(server_xml)
+    FileUtils.rm(File.join(dir, "resources", "virgo.zip"))
+    FileUtils.mv(File.join(dir, "resources", "droplet.yaml"), File.join(dir, "droplet.yaml"))
+    FileUtils.mkdir_p(webapp_path)
+    webapp_path
+  end
+  
+  def self.copy_jar(jar, dest)    
+    jar_path = File.join(File.dirname(__FILE__), 'resources', jar)
+    FileUtils.mkdir_p dest
+    FileUtils.cp(jar_path, dest)
+  end
+  
+  def self.copy_service_drivers(services, webapp_root)
+    drivers = services.select { |svc|
+      SERVICE_DRIVER_HASH.has_key?(svc[:label])
+    }
+    drivers.each { |driver|      
+      driver_dest = File.join(webapp_root, "..", Virgo.repository,"usr")
+      copy_jar SERVICE_DRIVER_HASH[driver[:label]], driver_dest
+    } if drivers
+  end
+  
+  def self.prepare_stager(webapp_root)
+    dest = File.join(webapp_root, "..", Virgo.repository,"usr")
+     copy_jar AUTOSTAGING_JAR , dest
+     AUTOSTAGING_DEP.each{ |jar|
+        copy_jar jar , dest
+       }
+  end
+  
+  def self.detect_file_extension(webapppath)
+    Dir.chdir(webapppath) do
+      if !Dir.glob("*.plan").empty?
+        return "plan"
+      elsif !Dir.glob("*.par").empty?
+        return "parpacked"
+      end
     end
-  end
 
-  def copy_source_files(dest = nil)
-    extension = Virgo.detect_file_extension(source_directory)
-    dest ||= File.join(destination_directory, "app.#{extension}")
-    if extension === "plan"
-      system "cp -a #{File.join(source_directory, "*")} #{dest}"
-      system "cp -rf #{File.join(dest, Virgo.repository, "*")} #{File.join(dest, "..", Virgo.repository)}"
-      system "rm -rf #{File.join(dest, Virgo.repository)}"
-    else
-      output = %x[cd #{source_directory}; zip -r #{File.join(dest, File.basename(source_directory) + ".#{extension}")} *]
-      raise "Could not pack Virgo application: #{output}" unless $? == 0
+    manifest_mf = File.join(webapppath, "META-INF/MANIFEST.MF")
+    if File.file? manifest_mf
+      manifest = YAML.load_file(manifest_mf)
+      return "jar" if manifest["Bundle-SymbolicName"]
+      return "par" if manifest["Application-SymbolicName"]
     end
+
+    "war"
   end
 
-  def create_app_directories
-    FileUtils.mkdir_p File.join(destination_directory, 'logs')
-  end
-
-  # The Virgo start script runs from the root of the staged application.
-  def change_directory_for_start
-    "cd virgo"
-  end
-
-  # We redefine this here because Virgo doesn't want to be passed the cmdline
-  # args that were given to the 'start' script.
-  def start_command
-    "./bin/dmk.sh start -jmxport $(($PORT + 1))"
-  end
-
-  def configure_memory_opts
-    # We want to set this to what the user requests, *not* set a minum bar
-    "-Xms#{application_memory}m -Xmx#{application_memory}m"
-  end
-
-  private
-
-  def startup_script
-    vars = environment_hash
-    vars['JAVA_OPTS'] = configure_memory_opts
-    vars['JAVA_HOME'] = (ENV['JAVA_HOME'].nil? && '/usr/lib/jvm/java-6-sun') || ENV['JAVA_HOME']
-    generate_startup_script(vars) do
-      <<-VIRGO
-export CATALINA_OPTS="$CATALINA_OPTS `ruby resources/set_environment`"
-env > env.log
-PORT=-1
-while getopts ":p:" opt; do
-  case $opt in
-    p)
-      PORT=$OPTARG
-      ;;
-  esac
-done
-if [ $PORT -lt 0 ] ; then
-  echo "Missing or invalid port (-p)"
-  exit 1
-fi
-ruby resources/generate_server_xml $PORT
-      VIRGO
-    end
-  end
-
-  def stop_script
-    vars = environment_hash
-    generate_stop_script(vars)
-  end
 end
