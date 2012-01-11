@@ -2,7 +2,7 @@ require 'fileutils'
 require 'yaml'
 
 class Virgo
-  AUTOSTAGING_JAR = 'com.sap.icp.autostager-1.0.0.PTYP.jar'
+  AUTOSTAGING_JAR = 'osgi.autostager-1.0.0.PTYP.jar'
   AUTOSTAGING_DEP =['com.springsource.org.codehaus.jackson-1.4.3.jar','com.springsource.org.codehaus.jackson.mapper-1.4.3.jar',
                      'com.springsource.org.joda.time-1.5.2.jar' ]
   SERVICE_DRIVER_HASH = {
