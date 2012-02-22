@@ -138,6 +138,7 @@ class Component
         if is_cloud_controller?
           Dir.chdir("#{File.dirname(__FILE__)}/../cloud_controller") { `bundle exec rake db:migrate CLOUD_CONTROLLER_CONFIG=#{@configuration_path}` }
         end
+        puts component_start_path
         exec("#{component_start_path}")
       end
 

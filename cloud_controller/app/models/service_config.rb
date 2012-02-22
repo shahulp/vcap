@@ -39,7 +39,7 @@ class ServiceConfig < ActiveRecord::Base
         :plan  => plan,
         :plan_option => plan_option
       )
-
+  
       if EM.reactor_running?
         # yields
         endpoint = "#{service.url}/gateway/v1/configurations"

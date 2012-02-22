@@ -24,8 +24,9 @@ module VCAP::Services::Api
           },
           :body => msg.encode,
         }
+        timeout = 1000
         if timeout
-          EM::HttpRequest.new(url, :inactivity_timeout => timeout).send(verb.to_sym, req)
+          EM::HttpRequest.new(url, :inactivity_timeout => timeout).post(verb.to_sym, req)
         else
           EM::HttpRequest.new(url).send(verb.to_sym, req)
         end

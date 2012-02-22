@@ -7,7 +7,8 @@ class Virgo
                      'com.springsource.org.joda.time-1.5.2.jar' ]
   SERVICE_DRIVER_HASH = {
       "mysql-5.1" => 'com.springsource.com.mysql.jdbc-5.1.6.jar',
-      "postgresql-9.0" => 'com.springsource.org.postgresql.jdbc4-8.3.604.jar'
+      "postgresql-9.0" => 'com.springsource.org.postgresql.jdbc4-8.3.604.jar',
+      "maxdb-7.8" => 'com.sap.dbtech.jdbc-7.6.06.jar'
   }
 
   def self.resource_dir
